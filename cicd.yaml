@@ -1,0 +1,219 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Corley Events User API CI/CD
+Parameters:
+  ProjectName:
+    Type: String
+    Default: events
+  ServiceName:
+    Type: String
+    Default: demo-user
+  Branch:
+    Type: String
+    Default: staging
+  CodeBuildImage:
+    Type: String
+    Default: aws/codebuild/standard:4.0
+  GithubHttpsRepository:
+    Type: String
+    Default: https://github.com/corley/events-user-api.git
+  ECRRepository:
+    Type: String
+    Default: 424837382813.dkr.ecr.eu-west-1.amazonaws.com/events/user
+  StackName:
+    Type: String
+    Default: events-demo-user-api
+  NetworkStackNameParameter:
+    Type: String
+    Default: vpc-events-demo
+  EcsStackNameParameter:
+    Type: String
+    Default: ecs-events-demo
+  ServicePort:
+    Default: '8084'
+    Type: Number
+    Description: Your application port
+  ServicePriority:
+    Default: '4'
+    Type: Number
+    Description: Application priority
+  ServiceHostname:
+    Default: user.demo.events.corley.it
+    Type: String
+    Description: Application domain name
+  DesiredCapacity:
+    Type: Number
+    Default: 2
+  MaxSize:
+    Type: Number
+    Default: 5
+  CPU:
+    Type: Number
+    Default: 256
+  Memory:
+    Type: Number
+    Default: 256
+  Environment:
+    Type: String
+    Default: production
+  DbHost:
+    Type: String
+    Default: mongodb://universe:UniverseUniverse11@demo-events.cluster-c6jgspy4hcm4.eu-west-1.docdb.amazonaws.com:27017/user?ssl=true&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false
+  EndpointAuth:
+    Type: String
+    Default: https://user.demo.events.corley.it/v1/me
+  EndpointCompany:
+    Type: String
+    Default: https://company.demo.events.corley.it
+  EndpointEvent:
+    Type: String
+    Default: https://event.demo.events.corley.it
+  FilterSubject:
+    Type: String
+    Default: user
+  BuildSNSTopic:
+    Type: String
+    Default: arn:aws:sns:eu-west-1:424837382813:events-cicd
+Resources:
+  CodeBuild:
+    Type: 'AWS::CodeBuild::Project'
+    Properties:
+      Artifacts:
+        Type: NO_ARTIFACTS
+      BadgeEnabled: true
+      Cache:
+        Modes:
+          - LOCAL_SOURCE_CACHE
+          - LOCAL_DOCKER_LAYER_CACHE
+          - LOCAL_CUSTOM_CACHE
+        Type: LOCAL
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: !Ref CodeBuildImage
+        Type: LINUX_CONTAINER
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - Name: ECR_IMAGE
+            Value: !Ref ECRRepository
+          - Name: STACK_NAME
+            Value: !Ref StackName
+          - Name: NETWORK_STACK_NAME
+            Value: !Ref NetworkStackNameParameter
+          - Name: ECS_STACK_NAME
+            Value: !Ref EcsStackNameParameter
+          - Name: SERVICE_NAME
+            Value: !Ref ServiceName
+          - Name: SERVICE_PORT
+            Value: !Ref ServicePort
+          - Name: SERVICE_PRIORITY
+            Value: !Ref ServicePriority
+          - Name: SERVICE_HOSTNAME
+            Value: !Ref ServiceHostname
+          - Name: DESIRED_CAPACITY
+            Value: !Ref DesiredCapacity
+          - Name: MAX_SIZE
+            Value: !Ref MaxSize
+          - Name: CPU
+            Value: !Ref CPU
+          - Name: MEMORY
+            Value: !Ref Memory
+          - Name: ENVIRONMENT
+            Value: !Ref Environment
+          - Name: DB_HOST
+            Value: !Ref DbHost
+          - Name: ENDPOINT_AUTH
+            Value: !Ref EndpointAuth
+          - Name: ENDPOINT_COMPANY
+            Value: !Ref EndpointCompany
+          - Name: ENDPOINT_EVENT
+            Value: !Ref EndpointEvent
+          - Name: FILTER_DUBJECT
+            Value: !Ref FilterSubject
+      Name: !Sub ${ProjectName}-${ServiceName}-${Environment} 
+      QueuedTimeoutInMinutes: 480
+      ServiceRole: !Ref CodeBuildRole
+      Source:
+        Auth:
+          Type: OAUTH
+        Location: !Ref GithubHttpsRepository
+        Type: GITHUB
+      SourceVersion: !Sub refs/heads/${Branch} 
+      Tags:
+        - Key: app
+          Value: !Ref ProjectName
+        - Key: env
+          Value: !Ref Environment
+      TimeoutInMinutes: 20
+      Triggers:
+        FilterGroups:
+          - - Type: EVENT
+              Pattern: PUSH
+            - Type: HEAD_REF
+              Pattern: !Sub refs/heads/${Branch} 
+        Webhook: true
+  CodeBuildRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codebuild.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: !Sub ${ProjectName}-${ServiceName}-service-role 
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Resource: '*'
+                Action:
+                  - 'codebuild:CreateReportGroup'
+                  - 'codebuild:CreateReport'
+                  - 'codebuild:UpdateReport'
+                  - 'codebuild:BatchPutTestCases'
+              - Effect: Allow
+                Resource: '*'
+                Action:
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'logs:CreateLogGroup'
+              - Effect: Allow
+                Resource: '*'
+                Action:
+                  - 's3:*'
+                  - 'sns:*'
+                  - 'sqs:*'
+                  - 'ec2:*'
+                  - 'ecs:*'
+                  - 'iam:*'
+                  - 'elasticloadbalancing:*'
+                  - 'cloudformation:*'
+                  - 'secretsmanager:GetSecretValue'
+              - Effect: Allow
+                Resource: '*'
+                Action:
+                  - 'ecr:BatchCheckLayerAvailability'
+                  - 'ecr:CompleteLayerUpload'
+                  - 'ecr:GetAuthorizationToken'
+                  - 'ecr:InitiateLayerUpload'
+                  - 'ecr:PutImage'
+                  - 'ecr:UploadLayerPart'
+  CodeBuildNotificationRule:
+    Type: 'AWS::CodeStarNotifications::NotificationRule'
+    Properties:
+      Name: !Sub ${ProjectName}-${ServiceName}-notification-rule-${Environment}
+      DetailType: FULL
+      Resource: !GetAtt 
+        - CodeBuild
+        - Arn
+      EventTypeIds:
+        - codebuild-project-build-state-failed
+        - codebuild-project-build-state-succeeded
+        - codebuild-project-build-state-in-progress
+        - codebuild-project-build-state-stopped
+      Targets:
+        - TargetType: SNS
+          TargetAddress: !Ref BuildSNSTopic

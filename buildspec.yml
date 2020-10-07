@@ -1,0 +1,42 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo Logging in to Amazon ECR...
+      - $(aws ecr get-login --no-include-email --region $AWS_DEFAULT_REGION)
+      - echo Creating local mongo for test...
+      - docker-compose up -d db
+      - sleep 10
+  build:
+    commands:
+      - echo Executing test...
+      - docker-compose run -e NODE_ENV=test --rm web npm i
+      #- docker-compose run -e NODE_ENV=test --rm web ./node_modules/.bin/jasmine
+      - echo Building the Docker image...
+      - docker build -t $ECR_IMAGE:$CODEBUILD_RESOLVED_SOURCE_VERSION -f Dockerfile_prod .
+      - echo Pushing the Docker image...
+      - docker push $ECR_IMAGE:$CODEBUILD_RESOLVED_SOURCE_VERSION
+      - echo Validate CloudFormation template
+      - aws cloudformation validate-template --template-body file://cloudformation.json
+      - echo Creating CloudFormation Parameter Overrides
+      - echo Deploy CloudFormation Stack
+      - |
+        aws cloudformation deploy --template cloudformation.json --stack-name $STACK_NAME --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM --parameter-overrides \
+        "NetworkStackNameParameter=$NETWORK_STACK_NAME" \
+        "EcsStackNameParameter=$ECS_STACK_NAME" \
+        "ServiceName=$SERVICE_NAME" \
+        "ServicePort=$SERVICE_PORT" \
+        "ServicePriority=$SERVICE_PRIORITY" \
+        "ServiceHostname=$SERVICE_HOSTNAME" \
+        "Release=$CODEBUILD_RESOLVED_SOURCE_VERSION" \
+        "DesiredCapacity=$DESIRED_CAPACITY" \
+        "MaxSize=$MAX_SIZE" \
+        "CPU=$CPU" \
+        "Memory=$MEMORY" \
+        "Environment=$ENVIRONMENT" \
+        "DbHost=$DB_HOST" \
+        "EndpointAuth=$ENDPOINT_AUTH" \
+        "EndpointCompany=$ENDPOINT_COMPANY" \
+        "EndpointEvent=$ENDPOINT_EVENT" \
+        "FilterSubject=$FILTER_DUBJECT"

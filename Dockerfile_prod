@@ -1,0 +1,12 @@
+FROM node:lts-alpine
+
+WORKDIR /code
+
+ADD package.json package.json
+RUN npm i --production
+ADD config config
+ADD priv priv
+ADD src src
+ADD migrate-mongo-config.js migrate-mongo-config.js
+
+CMD ["node", "src/index.js"]

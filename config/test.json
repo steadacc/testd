@@ -1,0 +1,30 @@
+{
+  "db": {
+    "host": "mongodb://db:27017/app_test",
+    "options": {
+      "useNewUrlParser": true,
+      "useFindAndModify": false,
+      "autoIndex": false
+    }
+  },
+  "log": {
+    "name": "app",
+    "base": {
+      "env": "test"
+    },
+    "enabled": false,
+    "level": 30
+  },
+  "sns": {
+    "region": "",
+    "topic_arn": "",
+    "filter_subject": ""
+  },
+  "credentials": {
+    "me": ""
+  },
+  "endpoints": {
+    "company": "http://192.168.8.106:3002/v1/company",
+    "event": "http://192.168.8.106:3002/v1/event"
+  }
+}

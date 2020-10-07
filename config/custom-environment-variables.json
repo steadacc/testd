@@ -1,0 +1,21 @@
+{
+  "db": {
+    "host": "DB_HOST"
+  },
+  "log": {
+    "name": "SERVICE_NAME",
+    "base": {
+      "region": "AWS_REGION",
+      "env": "NODE_ENV"
+    }
+  },
+  "sns": {
+    "region": "AWS_REGION",
+    "arn": "SQS_ARN"
+  },
+  "endpoints": {
+    "user": "ENDPOINT_USER",
+    "company": "ENDPOINT_COMPANY"
+  },
+  "token_sa": "SUPERADMIN_TOKEN"
+}

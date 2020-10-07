@@ -1,0 +1,27 @@
+{
+  "db": {
+    "host": "mongodb://db:27017/app",
+    "options": {
+      "useNewUrlParser": true,
+      "useFindAndModify": false,
+      "autoIndex": false
+    }
+  },
+  "log": {
+    "name": "app",
+    "base": {
+      "env": "dev"
+    },
+    "enabled": true,
+    "level": 20
+  },
+  "sqs": {
+    "region": "",
+    "arn": ""
+  },
+  "endpoints": {
+    "user": "https://user.demo.events.corley.it",
+    "company": "https://company.demo.events.corley.it"
+  },
+  "token_sa": "Basic =="
+}

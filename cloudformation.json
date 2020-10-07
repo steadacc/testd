@@ -1,0 +1,403 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Parameters": {
+    "NetworkStackNameParameter": {
+      "Type": "String",
+      "Default": "network-stack",
+      "Description": "Network base stack"
+    },
+    "EcsStackNameParameter": {
+      "Type": "String",
+      "Default": "ecs-cluster",
+      "Description": "ECS cluster cloudformation stack name"
+    },
+    "ServiceName": {
+      "Type": "String",
+      "Default": "resource-user",
+      "Description": "Your application name (used for lambda functions)"
+    },
+    "ServicePort": {
+      "Default": "8083",
+      "Type": "Number",
+      "Description": "Your application port"
+    },
+    "ServicePriority": {
+      "Default": "3",
+      "Type": "Number",
+      "Description": "Application priority"
+    },
+    "ServiceHostname": {
+      "Default": "user.universe.corley.it",
+      "Type": "String",
+      "Description": "Application domain name"
+    },
+    "Environment": {
+      "Type": "String",
+      "Default": "production",
+      "Description": "Environment"
+    },
+    "Release": {
+      "Type": "String",
+      "Default": "1234356",
+      "Description": "Docker image release (TAG)"
+    },
+    "DesiredCapacity": {
+      "Type": "Number",
+      "Default": "1",
+      "Description": "Number of instances to launch in your ECS cluster."
+    },
+    "MaxSize": {
+      "Type": "Number",
+      "Default": 5,
+      "Description": "Number of max task count"
+    },
+    "CPU": {
+      "Type": "Number",
+      "Default": 512,
+      "Description": "CPU Shares"
+    },
+    "Memory": {
+      "Type": "Number",
+      "Default": 512,
+      "Description": "Memory limit in MB"
+    },
+    "DbHost": {
+      "Type": "String"
+    },
+    "FilterSubject": {
+      "Type": "String",
+      "Default": "",
+      "Description": ""
+    },
+    "Auth": {
+      "Type": "String",
+      "Default": "",
+      "Description": ""
+    },
+    "EndpointCompany": {
+      "Type": "String",
+      "Default": "",
+      "Description": ""
+    },
+    "EndpointEvent": {
+      "Type": "String",
+      "Default": "",
+      "Description": ""
+    }
+  },
+  "Resources": {
+    "TaskRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "ecs-tasks.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Path": "/",
+        "Policies": [
+          {
+            "PolicyName": "on-user-signup-sns-notification",
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sns:Publish"
+                  ],
+                  "Resource": [
+                    {
+                      "Ref": "UserTopicCreate"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "UserTopicCreate": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "DisplayName": {
+          "Fn::Sub": "${AWS::StackName}-user-topic"
+        },
+        "TopicName": {
+          "Fn::Sub": "${AWS::StackName}-user-topic"
+        }
+      }
+    },
+    "taskdefinition": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "TaskRoleArn": {
+          "Ref": "TaskRole"
+        },
+        "ContainerDefinitions": [
+          {
+            "Name": {
+              "Ref": "ServiceName"
+            },
+            "Cpu": {
+              "Ref": "CPU"
+            },
+            "Essential": "true",
+            "Image": {
+              "Fn::Join": [
+                ":",
+                [
+                  "424837382813.dkr.ecr.eu-west-1.amazonaws.com/events/user",
+                  {
+                    "Ref": "Release"
+                  }
+                ]
+              ]
+            },
+            "Memory": {
+              "Ref": "Memory"
+            },
+            "Environment": [
+              {
+                "Name": "DB_HOST",
+                "Value": {
+                  "Ref": "DbHost"
+                }
+              },
+              {
+                "Name": "SERVICE_NAME",
+                "Value": {
+                  "Ref": "ServiceName"
+                }
+              },
+              {
+                "Name": "AWS_REGION",
+                "Value": {
+                  "Ref": "AWS::Region"
+                }
+              },
+              {
+                "Name": "NODE_ENV",
+                "Value": {
+                  "Ref": "Environment"
+                }
+              },
+              {
+                "Name": "SNS_TOPIC_ARN",
+                "Value": {
+                  "Ref": "UserTopicCreate"
+                }
+              },
+              {
+                "Name": "SNS_FILTER_SUBJECT",
+                "Value": {
+                  "Ref": "FilterSubject"
+                }
+              },
+              {
+                "Name": "AUTH",
+                "Value": {
+                  "Ref": "Auth"
+                }
+              },
+              {
+                "Name": "ENDPOINT_COMPANY",
+                "Value": {
+                  "Ref": "EndpointCompany"
+                }
+              },
+              {
+                "Name": "ENDPOINT_EVENT",
+                "Value": {
+                  "Ref": "EndpointEvent"
+                }
+              }
+            ],
+            "LogConfiguration": {
+              "LogDriver": "awslogs",
+              "Options": {
+                "awslogs-group": {
+                  "Fn::ImportValue": {
+                    "Fn::Sub": "${EcsStackNameParameter}-LogGroupName"
+                  }
+                },
+                "awslogs-region": {
+                  "Ref": "AWS::Region"
+                },
+                "awslogs-stream-prefix": {
+                  "Ref": "ServiceName"
+                }
+              }
+            },
+            "MountPoints": [],
+            "PortMappings": [
+              {
+                "HostPort": {
+                  "Ref": "ServicePort"
+                },
+                "ContainerPort": 3000
+              }
+            ]
+          }
+        ],
+        "Volumes": []
+      }
+    },
+    "service": {
+      "Type": "AWS::ECS::Service",
+      "Properties": {
+        "Cluster": {
+          "Fn::ImportValue": {
+            "Fn::Sub": "${EcsStackNameParameter}-ECSCluster"
+          }
+        },
+        "DesiredCount": {
+          "Ref": "DesiredCapacity"
+        },
+        "LoadBalancers": [
+          {
+            "ContainerName": {
+              "Ref": "ServiceName"
+            },
+            "ContainerPort": "3000",
+            "TargetGroupArn": {
+              "Ref": "ECSTG"
+            }
+          }
+        ],
+        "Role": {
+          "Ref": "ECSServiceRole"
+        },
+        "TaskDefinition": {
+          "Ref": "taskdefinition"
+        }
+      }
+    },
+    "ECSALBListenerRule": {
+      "Type": "AWS::ElasticLoadBalancingV2::ListenerRule",
+      "Properties": {
+        "Actions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {
+              "Ref": "ECSTG"
+            }
+          }
+        ],
+        "Conditions": [
+          {
+            "Field": "host-header",
+            "Values": [
+              {
+                "Ref": "ServiceHostname"
+              }
+            ]
+          }
+        ],
+        "ListenerArn": {
+          "Fn::ImportValue": {
+            "Fn::Sub": "${EcsStackNameParameter}-ALBListener"
+          }
+        },
+        "Priority": {
+          "Ref": "ServicePriority"
+        }
+      }
+    },
+    "ECSTG": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "HealthCheckIntervalSeconds": 10,
+        "HealthCheckPath": "/v1/ping",
+        "HealthCheckProtocol": "HTTP",
+        "HealthCheckTimeoutSeconds": 5,
+        "HealthyThresholdCount": 2,
+        "Name": {
+          "Ref": "ServiceName"
+        },
+        "Port": {
+          "Ref": "ServicePort"
+        },
+        "Protocol": "HTTP",
+        "UnhealthyThresholdCount": 2,
+        "VpcId": {
+          "Fn::ImportValue": {
+            "Fn::Sub": "${NetworkStackNameParameter}-VpcID"
+          }
+        },
+        "TargetGroupAttributes": [
+          {
+            "Key": "deregistration_delay.timeout_seconds",
+            "Value": "30"
+          }
+        ]
+      }
+    },
+    "ECSServiceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "ecs.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Path": "/",
+        "Policies": [
+          {
+            "PolicyName": "ecs-service",
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "elasticloadbalancing:DeregisterInstancesFromLoadBalancer",
+                    "elasticloadbalancing:DeregisterTargets",
+                    "elasticloadbalancing:Describe*",
+                    "elasticloadbalancing:RegisterInstancesWithLoadBalancer",
+                    "elasticloadbalancing:RegisterTargets",
+                    "ec2:Describe*",
+                    "ec2:AuthorizeSecurityGroupIngress"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "UserTopicCreate": {
+      "Description": "On new user signup notification",
+      "Value": {
+        "Ref": "UserTopicCreate"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-UserSignupArn"
+        }
+      }
+    }
+  }
+}
